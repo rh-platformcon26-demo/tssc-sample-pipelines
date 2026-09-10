@@ -69,7 +69,7 @@ spec:
       onError: continue
       script: |
         #!/usr/bin/env bash
-        set +x
+        set -x
 
         # Check if rox API endpoint is configured
         if test -f /rox-secret/rox-api-endpoint ; then
@@ -148,6 +148,7 @@ spec:
       script: |
         #!/usr/bin/env bash
         set -euo pipefail
+        set -x
 
         ROX_IMAGE_CHECK_EXIT_CODE_PATH=$(steps.step-rox-image-check.exitCode.path)
         ROX_IMAGE_CHECK_STATUS=$(cat "$ROX_IMAGE_CHECK_EXIT_CODE_PATH")
