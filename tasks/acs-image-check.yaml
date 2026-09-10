@@ -124,6 +124,8 @@ spec:
 
         cp roxctl_image_check_output.json /steps-shared-folder/acs-image-check.json
 
+        echo ROXCTL_CHECK_STATUS : $ROXCTL_CHECK_STATUS
+
         # Exit code 3 means the error occurred during roxctl image check, but setup was successful
         if [ "$ROXCTL_CHECK_STATUS" -ne 0 ]; then
           exit 3
