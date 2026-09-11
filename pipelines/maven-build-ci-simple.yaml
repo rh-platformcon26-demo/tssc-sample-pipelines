@@ -167,6 +167,10 @@ spec:
       params:
       - name: SUBDIRECTORY
         value: source
+      - name: GOALS
+        value:
+          - -Dmaven.repo.local=$(workspaces.maven-cache.path)
+          - package
       runAfter:
         - clone-repository
       taskRef:
@@ -176,6 +180,8 @@ spec:
           workspace: workspace
         - name: maven-settings
           workspace: maven-settings
+        - name: maven-cache
+          workspace: maven-cache
     - name: build-container
       params:
         - name: IMAGE
@@ -292,6 +298,8 @@ spec:
   workspaces:
     - name: workspace
     - name: maven-settings
+    - name: maven-cache
+      optional: true
     # - name: gitops-auth
     #   optional: true
     - name: git-auth

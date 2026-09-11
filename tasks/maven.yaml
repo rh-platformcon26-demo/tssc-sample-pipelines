@@ -122,3 +122,6 @@ spec:
     - description: The workspace consisting of the custom maven settings provided by the user.
       name: maven_settings
       optional: true
+    - description: The workspace consisting of the Maven local repository cache. Can be backed by a PersistentVolumeClaim to reuse dependencies across PipelineRuns.
+      name: maven-cache
+      optional: true
