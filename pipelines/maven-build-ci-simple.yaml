@@ -7,32 +7,7 @@ metadata:
     pipelines.openshift.io/used-by: build-cloud
   name: maven-build-ci-simple
 spec:
-  # finally:
-  #   - name: show-sbom
-  #     params:
-  #       - name: IMAGE_URL
-  #         value: $(tasks.build-container.results.IMAGE_URL)
-  #     taskRef:
-  #       name: show-sbom-rhdh
-  #   - name: show-summary
-  #     params:
-  #       - name: pipelinerun-name
-  #         value: $(context.pipelineRun.name)
-  #       - name: git-url
-  #         value: $(tasks.clone-repository.results.url)?rev=$(tasks.clone-repository.results.commit)
-  #       - name: image-url
-  #         value: $(params.output-image)
-  #       - name: build-task-status
-  #         value: $(tasks.build-container.status)
-  #     taskRef:
-  #       name: summary
-  #     workspaces:
-  #       - name: workspace
-  #         workspace: workspace
   params:
-    # - description: Name of the software component
-    #   name: component-name
-    #   type: string
     - description: Source Repository URL
       name: git-url
       type: string
@@ -61,10 +36,6 @@ spec:
     - default: rox-api-token
       name: stackrox-secret
       type: string
-    # - default: gitops-auth-secret
-    #   description: 'Secret name to enable this pipeline to update the gitops repo with the new image. '
-    #   name: gitops-auth-secret-name
-    #   type: string
     - default: push
       description: Event that triggered the pipeline run, e.g. push, pull_request
       name: event-type
@@ -77,30 +48,9 @@ spec:
       description: Path to a file with build arguments for buildah, see https://www.mankier.com/1/buildah-build#--build-arg-file
       name: build-args-file
       type: string
-    # - name: trustification-secret-name
-    #   default: tpa-secret
-    #   type: string
-    # - name: fail-if-trustification-not-configured
-    #   default: 'true'
-    #   type: string
     - name: sboms-dir
       default: sboms
       type: string
-    # - name: certificate-identity
-    #   type: string
-    #   default: userX@demo.redhat.com
-    # - name: oidc-issuer
-    #   type: string
-    #   default: https://sso.<domain>/realms/trusted-artifact-signer
-    # - name: rekor-url
-    #   type: string
-    #   default: http://rekor-server.tssc-tas.svc
-    # - name: tuf-mirror
-    #   type: string
-    #   default: http://tuf.tssc-tas.svc
-    # - name: verify-commit
-    #   type: string
-    #   default: 'false'
   results:
     - name: IMAGE_URL
       value: $(tasks.build-container.results.IMAGE_URL)
@@ -141,28 +91,6 @@ spec:
           workspace: workspace
         - name: basic-auth
           workspace: git-auth
-    # - name: verify-commit
-    #   params:
-    #   - name: certificate-identity
-    #     value: $(params.certificate-identity)
-    #   - name: oidc-issuer
-    #     value: $(params.oidc-issuer)
-    #   - name: rekor-url
-    #     value: $(params.rekor-url)
-    #   - name: tuf-mirror
-    #     value: $(params.tuf-mirror)
-    #   runAfter:
-    #     - clone-repository
-    #   taskRef:
-    #     kind: Task
-    #     name: verify-commit
-    #   workspaces:
-    #     - name: repository
-    #       workspace: workspace
-    #   when:
-    #     - input: "$(params.verify-commit)"
-    #       operator: in
-    #       values: ["true"]
     - name: package
       params:
       - name: SUBDIRECTORY
@@ -181,7 +109,7 @@ spec:
         - name: maven-settings
           workspace: maven-settings
         - name: maven-cache
-          workspace: maven-cache
+          workspace: workspace
     - name: build-container
       params:
         - name: IMAGE
@@ -213,23 +141,6 @@ spec:
       workspaces:
         - name: source
           workspace: workspace
-    # - name: upload-sboms-to-trustification
-    #   params:
-    #   - name: COMPONENT_NAME
-    #     value: $(params.component-name)
-    #   - name: SBOMS_DIR
-    #     value: $(params.sboms-dir)
-    #   - name: TRUSTIFICATION_SECRET_NAME
-    #     value: $(params.trustification-secret-name)
-    #   - name: FAIL_IF_TRUSTIFICATION_NOT_CONFIGURED
-    #     value: $(params.fail-if-trustification-not-configured)
-    #   runAfter:
-    #   - build-container
-    #   taskRef:
-    #     name: upload-sbom-to-trustification
-    #   workspaces:
-    #   - name: sboms
-    #     workspace: workspace
     - name: acs-image-check
       params:
         - name: rox-secret-name
@@ -298,10 +209,6 @@ spec:
   workspaces:
     - name: workspace
     - name: maven-settings
-    - name: maven-cache
-      optional: true
-    # - name: gitops-auth
-    #   optional: true
     - name: git-auth
       optional: true
 
