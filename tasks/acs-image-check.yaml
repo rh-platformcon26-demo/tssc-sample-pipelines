@@ -162,27 +162,23 @@ spec:
         fi
 
         # Fail on non-zero rox-image-check step exit code
-        # Except if the error is due to policy violations (exit code 3 && at least one severe violation)
+        # Except if the error is due to policy violations (exit code 3 && no policy is enforced)
         if [ "$ROX_IMAGE_CHECK_STATUS" -ne 3 ]
         then
           echo "Error occurred during setup of roxctl"
           exit "$ROX_IMAGE_CHECK_STATUS"
         fi
 
-        # Number of policy violations with Critical and High severity parsed from the report
-        severe_violations=$(
-          jq '.summary |
-            with_entries(
-              select(.key | IN("CRITICAL", "HIGH"))
-            ) |
-            add' \
+        # Number of violated policies with enforcement enabled (non-empty enforcementActions)
+        enforced_policies=$(
+          jq '[.policies[]? | select(((.enforcementActions // []) | length) > 0)] | length' \
             /steps-shared-folder/acs-image-check.json
         )
 
-        # If roxctl image check exited with non-zero code and it is not because of policy violations, report error
-        if [ "$severe_violations" -ne 0 ]
+        # Fail only when at least one violated policy is in ENFORCE mode
+        if [ "$enforced_policies" -gt 0 ]
         then
-          echo "Error occurred during roxctl image check, please check the logs of rox-image-check step."
+          echo "Policy enforcement failed on image, please check the logs of rox-image-check step."
           exit "$ROX_IMAGE_CHECK_STATUS"
         fi
 
