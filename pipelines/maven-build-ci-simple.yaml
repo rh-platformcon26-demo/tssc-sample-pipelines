@@ -109,7 +109,7 @@ spec:
         - name: maven-settings
           workspace: maven-settings
         - name: maven-cache
-          workspace: workspace
+          workspace: maven-cache
     - name: build-container
       params:
         - name: IMAGE
@@ -209,6 +209,8 @@ spec:
   workspaces:
     - name: workspace
     - name: maven-settings
+    - name: maven-cache
+      optional: true
     - name: git-auth
       optional: true
 
