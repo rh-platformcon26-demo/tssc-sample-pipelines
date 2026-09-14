@@ -102,7 +102,7 @@ spec:
       runAfter:
         - clone-repository
       taskRef:
-        name: maven
+        name: maven-21
       workspaces:
         - name: source
           workspace: workspace
