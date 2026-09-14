@@ -1,0 +1,144 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: cosign-sign
+  labels:
+    app.kubernetes.io/part-of: platformcon-wescale
+  annotations:
+    description: |
+      Signe une image avec la clé privée du Secret cosign-key.
+      Flux TUF/RHTAS aligné sur le job GitLab rhtas_sign_image (checksum 1.root.json, initialize, sign).
+spec:
+  params:
+    - name: IMAGE
+      type: string
+      description: Image à signer, sans digest
+    - name: DIGEST
+      type: string
+      description: Digest sha256:… renvoyé par skopeo copy
+      default: ""
+    - name: COSIGN_IMAGE
+      type: string
+      default: registry.redhat.io/rhtas/cosign-rhel9:1787307743
+      description: Cosign UBI9 (RHTAS) — shell, curl, awk
+    - name: COSIGN_SECRET
+      type: string
+      default: cosign-key
+    - name: COSIGN_KEY_FILENAME
+      type: string
+      default: cosign.key
+    - name: REKOR_URL
+      type: string
+      default: https://rekor-server-bnp-hsm.apps.cluster-dpjhl.dyn.redhatworkshops.io
+    - name: FULCIO_URL
+      type: string
+      default: https://fulcio-server-bnp-hsm.apps.cluster-dpjhl.dyn.redhatworkshops.io
+    - name: TUF_MIRROR
+      type: string
+      default: https://tuf-bnp-hsm.apps.cluster-dpjhl.dyn.redhatworkshops.io
+      description: Miroir TUF RHTAS bnp-hsm (TUF_URL)
+    - name: OIDC_CLIENT_ID
+      type: string
+      default: trusted-artifact-signer
+    - name: COSIGN_REPOSITORY
+      type: string
+      default: ""
+      description: Repo OCI optionnel pour stocker les signatures (sinon à côté de l'image)
+    - name: REGISTRY_SECRET
+      type: string
+      default: tssc-tssc-rw-pull-secret
+  volumes:
+    - name: signing-key
+      secret:
+        secretName: $(params.COSIGN_SECRET)
+    - name: registry-auth
+      secret:
+        secretName: $(params.REGISTRY_SECRET)
+        items:
+          - key: .dockerconfigjson
+            path: config.json
+  steps:
+    - name: sign
+      image: $(params.COSIGN_IMAGE)
+      env:
+        - name: HOME
+          value: /tmp
+        - name: DOCKER_CONFIG
+          value: /workspace/docker-config
+        - name: COSIGN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: $(params.COSIGN_SECRET)
+              key: cosign.password
+        - name: COSIGN_YES
+          value: "true"
+        - name: IMAGE
+          value: $(params.IMAGE)
+        - name: DIGEST
+          value: $(params.DIGEST)
+        - name: COSIGN_KEY_FILENAME
+          value: $(params.COSIGN_KEY_FILENAME)
+        - name: TUF_URL
+          value: $(params.TUF_MIRROR)
+        - name: SIGSTORE_FULCIO_URL
+          value: $(params.FULCIO_URL)
+        - name: SIGSTORE_REKOR_URL
+          value: $(params.REKOR_URL)
+        - name: COSIGN_OIDC_CLIENT_ID
+          value: $(params.OIDC_CLIENT_ID)
+        - name: COSIGN_REPOSITORY
+          value: $(params.COSIGN_REPOSITORY)
+      volumeMounts:
+        - name: signing-key
+          mountPath: /workspace/signing-key
+          readOnly: true
+        - name: registry-auth
+          mountPath: /workspace/docker-config
+          readOnly: true
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+
+        export PATH="/usr/local/bin:/usr/bin:/bin:${PATH}"
+
+        key="/workspace/signing-key/${COSIGN_KEY_FILENAME}"
+        image="${IMAGE}"
+        if [[ -n "${DIGEST}" ]]; then
+          image="${IMAGE}@${DIGEST}"
+        fi
+        registry="${IMAGE%%/*}"
+
+        if [[ -x /usr/bin/cosign ]]; then
+          COSIGN_BIN=/usr/bin/cosign
+        elif [[ -x /usr/local/bin/cosign ]]; then
+          COSIGN_BIN=/usr/local/bin/cosign
+        else
+          echo "cosign introuvable dans PATH=${PATH}" >&2
+          ls -l /usr/bin /usr/local/bin >&2 || true
+          exit 127
+        fi
+
+        curl -s "${TUF_URL}/1.root.json" -o /tmp/1.root.json
+        sha256sum /tmp/1.root.json | awk '{print $1}' > /tmp/root.sha
+        read -r ROOT_CHECKSUM < /tmp/root.sha
+        export ROOT_CHECKSUM
+        echo "${ROOT_CHECKSUM}"
+
+        if [[ ! -f "${DOCKER_CONFIG}/config.json" ]]; then
+          echo "docker config manquant (${DOCKER_CONFIG}/config.json)" >&2
+          exit 1
+        fi
+        echo "Using mounted docker config for ${registry}"
+
+
+        "${COSIGN_BIN}" initialize --mirror "${TUF_URL}" --root "${TUF_URL}/1.root.json" --root-checksum "${ROOT_CHECKSUM}" -d
+
+        echo "Signing ${image}"
+        "${COSIGN_BIN}" sign --verbose --key "${key}" --rekor-url "${SIGSTORE_REKOR_URL}" -y "${image}"
+      securityContext:
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+        seccompProfile:
+          type: RuntimeDefault
