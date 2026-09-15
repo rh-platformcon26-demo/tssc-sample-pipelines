@@ -214,4 +214,3 @@ spec:
       optional: true
     - name: git-auth
       optional: true
-

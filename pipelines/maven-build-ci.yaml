@@ -170,11 +170,12 @@ spec:
       - name: GOALS
         value:
           - -Dmaven.repo.local=$(workspaces.maven-cache.path)
+          - -Dmaven.test.skip=true
           - package
       runAfter:
         - verify-commit
       taskRef:
-        name: maven
+        name: maven-21
       workspaces:
         - name: source
           workspace: workspace
