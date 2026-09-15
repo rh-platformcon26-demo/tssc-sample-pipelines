@@ -100,7 +100,7 @@ spec:
       default: http://tuf.tssc-tas.svc
     - name: verify-commit
       type: string
-      default: 'false'
+      default: 'true'
   results:
     - name: IMAGE_URL
       value: $(tasks.build-container.results.IMAGE_URL)
