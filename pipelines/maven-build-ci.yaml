@@ -91,7 +91,7 @@ spec:
       default: userX@demo.redhat.com
     - name: oidc-issuer
       type: string
-      default: https://sso.apps.cluster-kql8t.dyn.redhatworkshops.io/realms/trusted-artifact-signer
+      default: https://sso.apps.cluster-kql8t.dyn.redhatworkshops.io/realms/tssc-iam
     - name: rekor-url
       type: string
       default: http://rekor-server.tssc-tas.svc
