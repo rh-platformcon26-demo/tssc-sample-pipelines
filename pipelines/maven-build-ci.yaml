@@ -255,7 +255,7 @@ spec:
       - name: FAIL_IF_TRUSTIFICATION_NOT_CONFIGURED
         value: $(params.fail-if-trustification-not-configured)
       runAfter:
-      - build-container
+      - cosign-sign
       taskRef:
         name: upload-sbom-to-trustification
       workspaces:
@@ -316,7 +316,7 @@ spec:
         - name: image
           value: $(tasks.build-container.results.IMAGE_URL)@$(tasks.build-container.results.IMAGE_DIGEST)
       runAfter:
-        - build-container
+        - cosign-sign
       taskRef:
         kind: Task
         name: update-deployment
