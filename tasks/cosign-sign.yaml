@@ -29,14 +29,16 @@ spec:
       default: cosign.key
     - name: REKOR_URL
       type: string
-      default: https://rekor-server-bnp-hsm.apps.cluster-dpjhl.dyn.redhatworkshops.io
+      default: http://rekor-server.tssc-tas.svc
+      description: Rekor (transparency log) — mêmes defaults que verify-commit/promote-to-env
     - name: FULCIO_URL
       type: string
-      default: https://fulcio-server-bnp-hsm.apps.cluster-dpjhl.dyn.redhatworkshops.io
+      default: http://fulcio-server.tssc-tas.svc
+      description: Fulcio (CA OIDC)
     - name: TUF_MIRROR
       type: string
-      default: https://tuf-bnp-hsm.apps.cluster-dpjhl.dyn.redhatworkshops.io
-      description: Miroir TUF RHTAS bnp-hsm (TUF_URL)
+      default: http://tuf.tssc-tas.svc
+      description: Miroir TUF RHTAS (TUF_URL)
     - name: OIDC_CLIENT_ID
       type: string
       default: trusted-artifact-signer

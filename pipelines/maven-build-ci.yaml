@@ -98,6 +98,13 @@ spec:
     - name: tuf-mirror
       type: string
       default: http://tuf.tssc-tas.svc
+    - name: fulcio-url
+      type: string
+      default: http://fulcio-server.tssc-tas.svc
+    - name: cosign-secret
+      description: Secret contenant cosign.key + cosign.password
+      type: string
+      default: cosign-key
     - name: verify-commit
       type: string
       default: 'true'
@@ -214,6 +221,29 @@ spec:
       workspaces:
         - name: source
           workspace: workspace
+    - name: cosign-sign
+      params:
+        - name: IMAGE
+          value: $(tasks.build-container.results.IMAGE_URL)
+        - name: DIGEST
+          value: $(tasks.build-container.results.IMAGE_DIGEST)
+        - name: REKOR_URL
+          value: $(params.rekor-url)
+        - name: FULCIO_URL
+          value: $(params.fulcio-url)
+        - name: TUF_MIRROR
+          value: $(params.tuf-mirror)
+        - name: COSIGN_SECRET
+          value: $(params.cosign-secret)
+      runAfter:
+        - build-container
+      taskRef:
+        name: cosign-sign
+      when:
+        - input: $(tasks.init.results.build)
+          operator: in
+          values:
+            - "true"
     - name: upload-sboms-to-trustification
       params:
       - name: COMPONENT_NAME
