@@ -29,6 +29,7 @@ spec:
   - image: registry.access.redhat.com/ubi9/toolbox@sha256:47d4891b3e744f5622a31bd21a42dd51358c43bbfd44860cc05c7b29cc520e66
     name: git-verify
     script: |
+      set -x
       wget -q http://cli-server.trusted-artifact-signer.svc:8080/clients/linux/cosign-amd64.gz
       wget -q http://cli-server.trusted-artifact-signer.svc:8080/clients/linux/gitsign-amd64.gz
       gunzip cosign-amd64.gz
