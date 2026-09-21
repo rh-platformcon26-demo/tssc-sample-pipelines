@@ -133,7 +133,7 @@ spec:
       runAfter:
         - package
       taskRef:
-        name: buildah-rhtap
+        name: buildah
       when:
         - input: $(tasks.init.results.build)
           operator: in
