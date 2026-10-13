@@ -1,0 +1,216 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: goose-run
+  labels:
+    app.kubernetes.io/part-of: platformcon-wescale
+  annotations:
+    description: |
+      Runs goose (AI agent) in headless mode against an instructions file
+      mounted from a ConfigMap (e.g. AGENTS.md).
+
+      Cluster prerequisites:
+      - ConfigMap (default goose-instructions) with key AGENTS.md (or INSTRUCTIONS_KEY)
+      - Secret (default goose-credentials) with key api-key (LLM API key)
+
+      The goose binary is downloaded at runtime from aaif-goose GitHub releases.
+spec:
+  description: >
+    Intelligent goose task: downloads the CLI, reads instructions from a ConfigMap,
+    and runs goose headless against the source workspace.
+  params:
+    - name: INSTRUCTIONS_CONFIGMAP
+      type: string
+      default: goose-instructions
+      description: Name of the ConfigMap that holds the instructions file
+    - name: INSTRUCTIONS_KEY
+      type: string
+      default: AGENTS.md
+      description: ConfigMap key / filename mounted under /instructions
+    - name: PROMPT
+      type: string
+      default: ""
+      description: Optional prompt passed to goose via -t (in addition to -i file)
+    - name: GOOSE_VERSION
+      type: string
+      default: v1.49.0
+      description: GitHub release tag (e.g. v1.49.0; avoid stable for direct binary download)
+    - name: GOOSE_PROVIDER
+      type: string
+      default: openai
+      description: Goose LLM provider (openai, anthropic, …)
+    - name: GOOSE_MODEL
+      type: string
+      default: gpt-4o
+      description: LLM model
+    - name: GOOSE_SECRET
+      type: string
+      default: goose-credentials
+      description: Secret containing the LLM API key
+    - name: GOOSE_SECRET_KEY
+      type: string
+      default: api-key
+      description: Secret key for the API key
+    - name: GOOSE_IMAGE
+      type: string
+      default: registry.access.redhat.com/ubi9/toolbox@sha256:47d4891b3e744f5622a31bd21a42dd51358c43bbfd44860cc05c7b29cc520e66
+      description: Lightweight UBI image with shell/curl/wget/tar (toolbox)
+    - name: MAX_TURNS
+      type: string
+      default: "50"
+      description: Goose turn limit (GOOSE_MAX_TURNS)
+  results:
+    - name: status
+      description: Succeeded or Failed
+  workspaces:
+    - name: source
+      description: Repository / working context for goose
+  volumes:
+    - name: instructions
+      configMap:
+        name: $(params.INSTRUCTIONS_CONFIGMAP)
+    - name: goose-creds
+      secret:
+        secretName: $(params.GOOSE_SECRET)
+  steps:
+    - name: run-goose
+      image: $(params.GOOSE_IMAGE)
+      workingDir: $(workspaces.source.path)
+      env:
+        - name: HOME
+          value: /tmp
+        - name: INSTRUCTIONS_KEY
+          value: $(params.INSTRUCTIONS_KEY)
+        - name: PROMPT
+          value: $(params.PROMPT)
+        - name: GOOSE_VERSION
+          value: $(params.GOOSE_VERSION)
+        - name: GOOSE_PROVIDER
+          value: $(params.GOOSE_PROVIDER)
+        - name: GOOSE_MODEL
+          value: $(params.GOOSE_MODEL)
+        - name: GOOSE_SECRET_KEY
+          value: $(params.GOOSE_SECRET_KEY)
+        - name: GOOSE_MAX_TURNS
+          value: $(params.MAX_TURNS)
+        - name: GOOSE_MODE
+          value: auto
+        - name: GOOSE_CONTEXT_STRATEGY
+          value: summarize
+        - name: GOOSE_DISABLE_SESSION_NAMING
+          value: "true"
+        - name: STATUS_PATH
+          value: $(results.status.path)
+      volumeMounts:
+        - name: instructions
+          mountPath: /instructions
+          readOnly: true
+        - name: goose-creds
+          mountPath: /var/run/secrets/goose
+          readOnly: true
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+
+        instructions="/instructions/${INSTRUCTIONS_KEY}"
+        api_key_file="/var/run/secrets/goose/${GOOSE_SECRET_KEY}"
+        goose_bin="/tmp/goose"
+        arch="$(uname -m)"
+
+        case "${arch}" in
+          x86_64|amd64) goose_arch="x86_64" ;;
+          aarch64|arm64) goose_arch="aarch64" ;;
+          *)
+            echo "Unsupported architecture: ${arch}" >&2
+            echo -n "Failed" > "${STATUS_PATH}"
+            exit 1
+            ;;
+        esac
+
+        if [[ ! -f "${instructions}" ]]; then
+          echo "Instructions file not found: ${instructions}" >&2
+          echo "Contents of /instructions:" >&2
+          ls -la /instructions >&2 || true
+          echo -n "Failed" > "${STATUS_PATH}"
+          exit 1
+        fi
+
+        if [[ ! -f "${api_key_file}" ]]; then
+          echo "API key not found: ${api_key_file}" >&2
+          echo -n "Failed" > "${STATUS_PATH}"
+          exit 1
+        fi
+        api_key="$(cat "${api_key_file}")"
+
+        case "${GOOSE_PROVIDER}" in
+          anthropic)
+            export ANTHROPIC_API_KEY="${api_key}"
+            ;;
+          *)
+            export OPENAI_API_KEY="${api_key}"
+            ;;
+        esac
+
+        asset="goose-${goose_arch}-unknown-linux-gnu.tar.bz2"
+        url="https://github.com/aaif-goose/goose/releases/download/${GOOSE_VERSION}/${asset}"
+        echo "Downloading goose (${GOOSE_VERSION}) from ${url}"
+
+        if command -v curl >/dev/null 2>&1; then
+          curl -fsSL "${url}" -o "/tmp/${asset}"
+        elif command -v wget >/dev/null 2>&1; then
+          wget -q -O "/tmp/${asset}" "${url}"
+        else
+          echo "neither curl nor wget available in the image" >&2
+          echo -n "Failed" > "${STATUS_PATH}"
+          exit 127
+        fi
+
+        tar -xjf "/tmp/${asset}" -C /tmp
+        if [[ ! -x "${goose_bin}" ]]; then
+          # archive may extract goose at the root or in a subdirectory
+          found="$(find /tmp -maxdepth 2 -type f -name goose -perm -111 2>/dev/null | head -n1 || true)"
+          if [[ -z "${found}" ]]; then
+            echo "goose binary not found after extraction" >&2
+            tar -tjf "/tmp/${asset}" >&2 || true
+            echo -n "Failed" > "${STATUS_PATH}"
+            exit 1
+          fi
+          goose_bin="${found}"
+        fi
+        rm -f "/tmp/${asset}"
+
+        echo "goose version: $("${goose_bin}" --version 2>/dev/null || true)"
+        echo "Instructions: ${instructions}"
+        echo "Provider=${GOOSE_PROVIDER} Model=${GOOSE_MODEL} MaxTurns=${GOOSE_MAX_TURNS}"
+
+        goose_args=(
+          run
+          --no-session
+          --with-builtin developer
+          --provider "${GOOSE_PROVIDER}"
+          --model "${GOOSE_MODEL}"
+          --output-format json
+          -i "${instructions}"
+        )
+        if [[ -n "${PROMPT}" ]]; then
+          goose_args+=(-t "${PROMPT}")
+        fi
+
+        set +e
+        "${goose_bin}" "${goose_args[@]}"
+        rc=$?
+        set -e
+
+        if [[ "${rc}" -eq 0 ]]; then
+          echo -n "Succeeded" > "${STATUS_PATH}"
+        else
+          echo -n "Failed" > "${STATUS_PATH}"
+          exit "${rc}"
+        fi
+      securityContext:
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+        seccompProfile:
+          type: RuntimeDefault
